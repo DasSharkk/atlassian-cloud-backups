@@ -115,31 +115,65 @@ def download_backup(
     download_path: str,
     output_dir: Path,
     date_str: str,
+    max_retries: int = 5,
 ) -> tuple[Path, int]:
-    """Download the backup ZIP to output_dir. Returns (file_path, size_bytes)."""
+    """Download the backup ZIP to output_dir with resume on broken connections."""
     download_url = f"{site_url}/wiki/download/{download_path}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"confluence-backup-{date_str}.zip"
     dest = output_dir / filename
 
-    print(f"Downloading backup from {download_url} ...")
-    # Use a fresh timeout for the potentially large download; stream it.
-    resp = session.get(
-        download_url, stream=True, timeout=DEFAULT_DOWNLOAD_TIMEOUT
-    )
-    resp.raise_for_status()
-
     chunk_size = 8 * 1024 * 1024  # 8 MiB
-    written = 0
-    with open(dest, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=chunk_size):
-            f.write(chunk)
-            written += len(chunk)
-            print(f"  Downloaded {written / (1024 * 1024):.1f} MiB ...", end="\r")
 
-    print(f"\nBackup saved to {dest} ({written} bytes)")
-    return dest, written
+    for attempt in range(1, max_retries + 1):
+        # Resume from where we left off if partial file exists
+        written = dest.stat().st_size if dest.exists() else 0
+        headers = {}
+        if written > 0:
+            headers["Range"] = f"bytes={written}-"
+            print(f"Resuming download from {written / (1024 * 1024):.1f} MiB (attempt {attempt}) ...")
+        else:
+            print(f"Downloading backup from {download_url} ...")
+
+        try:
+            resp = session.get(
+                download_url,
+                stream=True,
+                timeout=DEFAULT_DOWNLOAD_TIMEOUT,
+                headers=headers,
+            )
+            # 416 = Range Not Satisfiable — file is already complete
+            if resp.status_code == 416:
+                print(f"Download already complete ({written} bytes).")
+                return dest, written
+            resp.raise_for_status()
+
+            mode = "ab" if written > 0 and resp.status_code == 206 else "wb"
+            if mode == "wb":
+                written = 0
+
+            with open(dest, mode) as f:
+                for chunk in resp.iter_content(chunk_size=chunk_size):
+                    f.write(chunk)
+                    written += len(chunk)
+                    print(
+                        f"  Downloaded {written / (1024 * 1024):.1f} MiB ...",
+                        end="\r",
+                    )
+
+            print(f"\nBackup saved to {dest} ({written} bytes)")
+            return dest, written
+
+        except (requests.ConnectionError, requests.ChunkedEncodingError) as exc:
+            if attempt == max_retries:
+                raise RuntimeError(
+                    f"Download failed after {max_retries} attempts: {exc}"
+                ) from exc
+            wait = min(30 * attempt, 120)
+            print(f"\nConnection lost at {written / (1024 * 1024):.1f} MiB. "
+                  f"Retrying in {wait}s (attempt {attempt}/{max_retries}) ...")
+            time.sleep(wait)
 
 
 def write_metadata(
