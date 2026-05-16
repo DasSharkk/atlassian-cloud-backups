@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Confluence Cloud Backup Timer
+
+[Timer]
+OnCalendar=Sun 04:30
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

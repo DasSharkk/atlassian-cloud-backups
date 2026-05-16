@@ -1,0 +1,17 @@
+[Unit]
+Description=Confluence Cloud Weekly Backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/backup-confluence-weekly.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/confluence-snapshot /var/log/m365-backup
+PrivateTmp=true
