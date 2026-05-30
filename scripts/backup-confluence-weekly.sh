@@ -3,7 +3,7 @@
 # Confluence Cloud Weekly Backup — systemd wrapper
 #
 # Sources config from /etc/m365-backup/confluence.env, runs the Python CLI,
-# uploads with rclone, verifies, and cleans up old local snapshots.
+# uploads with rclone to multiple destinations, verifies, and cleans up.
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -23,12 +23,11 @@ source "$ENV_FILE"
 : "${ATLASSIAN_EMAIL:?missing ATLASSIAN_EMAIL}"
 : "${ATLASSIAN_API_TOKEN:?missing ATLASSIAN_API_TOKEN}"
 : "${LOCAL_SNAPSHOT_ROOT:?missing LOCAL_SNAPSHOT_ROOT}"
-: "${CONFLUENCE_DEST:?missing CONFLUENCE_DEST}"
+: "${CONFLUENCE_DESTS:?missing CONFLUENCE_DESTS}"
 : "${LOG_FILE:?missing LOG_FILE}"
 
 DATE="$(date -u +%Y-%m-%d)"
 SNAPSHOT="${LOCAL_SNAPSHOT_ROOT}/${DATE}"
-DEST="${CONFLUENCE_DEST}/${DATE}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 # CLI script location (same repo by default, overridable)
@@ -51,14 +50,21 @@ echo "Running Python backup CLI ..."
     --api-token "$ATLASSIAN_API_TOKEN" \
     --output-dir "$SNAPSHOT"
 
-# ---------- rclone upload ----------------------------------------------------
-echo "Uploading snapshot to ${DEST} ..."
-rclone copy "$SNAPSHOT" "$DEST" --progress
+# ---------- rclone upload to all destinations --------------------------------
+IFS=',' read -ra DESTS <<< "$CONFLUENCE_DESTS"
 
-echo "Verifying upload ..."
-rclone check "$SNAPSHOT" "$DEST" --one-way --size-only
+for DEST_BASE in "${DESTS[@]}"; do
+    DEST_BASE="$(echo "$DEST_BASE" | xargs)"  # trim whitespace
+    DEST="${DEST_BASE}/${DATE}"
 
-echo "Upload verified."
+    echo "--- Uploading snapshot to ${DEST} ---"
+    rclone copy "$SNAPSHOT" "$DEST" --progress
+
+    echo "--- Verifying ${DEST} ---"
+    rclone check "$SNAPSHOT" "$DEST" --one-way --size-only
+
+    echo "--- ${DEST} verified ---"
+done
 
 # ---------- local cleanup ----------------------------------------------------
 echo "Removing local snapshots older than ${RETENTION_DAYS} days ..."

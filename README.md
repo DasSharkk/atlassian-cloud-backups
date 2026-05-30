@@ -31,7 +31,7 @@ This repository contains:
 
 ```bash
 # 1. Clone the repo
-sudo git clone https://github.com/agile-innovations-tech/atlassian-cloud-backups.git /opt/atlassian-cloud-backups
+sudo git clone https://github.com/DasSharkk/atlassian-cloud-backups.git /opt/atlassian-cloud-backups
 
 # 2. Create a Python venv and install dependencies
 cd /opt/atlassian-cloud-backups
@@ -49,7 +49,7 @@ ATLASSIAN_SITE_URL="https://TENANT.atlassian.net"
 ATLASSIAN_EMAIL="backup@example.com"
 ATLASSIAN_API_TOKEN="your-api-token-here"
 LOCAL_SNAPSHOT_ROOT="/srv/confluence-snapshot"
-CONFLUENCE_DEST="hetzner-s3-infra-crypt:confluence-weekly"
+CONFLUENCE_DESTS="hetzner-s3-infra-crypt:confluence-weekly"
 LOG_FILE="/var/log/m365-backup/confluence-weekly.log"
 ENVEOF
 sudo chmod 600 /etc/m365-backup/confluence.env
@@ -73,7 +73,7 @@ Edit `/etc/m365-backup/confluence.env`:
 | `ATLASSIAN_EMAIL` | Email of the API token owner |
 | `ATLASSIAN_API_TOKEN` | Atlassian API token |
 | `LOCAL_SNAPSHOT_ROOT` | Local directory for daily snapshots |
-| `CONFLUENCE_DEST` | rclone destination (remote:path) |
+| `CONFLUENCE_DESTS` | rclone destinations, comma-separated (remote:path,remote:path,...) |
 | `LOG_FILE` | Path to the log file |
 
 Optional variables:
